@@ -102,5 +102,6 @@ class ColorDiff:
             else:
                 self.flushAll()
                 sys.stdout.write(line)
+        self.flushAll()
 
 ColorDiff().run()
