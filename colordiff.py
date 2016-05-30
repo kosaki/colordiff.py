@@ -31,15 +31,26 @@ import fileinput
 import re
 import sys
 
+# ANSI colors
+RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN = [1,2,3,4,5,6]
+
+def brightFG(ansi_number):  # bright and/or bold, depends on terminal
+    return '\033[1;3%dm' % ansi_number
+
+def darkFG(ansi_number):
+    return '\033[0;3%dm' % ansi_number
+
+def brightBG(ansi_number):
+    return '\033[1;4%dm' % ansi_number
+
+def darkBG(ansi_number):
+    return '\033[0;4%dm' % ansi_number
+
+CANCEL = '\033[0m'
+
 class ColorDiff:
-    RED = '\033[1;31m'
-    BLUE = '\033[1;34m'
-    MAGENTA = '\033[1;35m'
-    DARK_RED = '\033[0;31m'
-    DARK_BLUE = '\033[0;34m'
-    DARK_MAGENTA = '\033[0;35m'
-    DARK_CYAN = '\033[0;36m'
-    CANCEL = '\033[0m'
+    DEL, DEL_UNCHANGED = brightFG(RED), darkFG(RED)
+    INS, INS_UNCHANGED = brightFG(BLUE), darkFG(BLUE)
 
     def __init__(self):
         self.clear()
@@ -66,27 +77,26 @@ class ColorDiff:
                 m = minus_buf[ms:me]
                 p = plus_buf[ps:pe]
                 if op == 'delete':
-                    minus = self.concatWithColor(minus, ColorDiff.RED, m)
+                    minus = self.concatWithColor(minus, self.DEL, m)
                 elif op == 'equal':
-                    minus = self.concatWithColor(
-                        minus, ColorDiff.DARK_RED, m)
-                    plus = self.concatWithColor(plus, ColorDiff.DARK_BLUE, p)
+                    minus = self.concatWithColor(minus, self.DEL_UNCHANGED, m)
+                    plus = self.concatWithColor(plus, self.INS_UNCHANGED, p)
                 elif op == 'insert':
-                    plus = self.concatWithColor(plus, ColorDiff.BLUE, p)
+                    plus = self.concatWithColor(plus, self.INS, p)
                 elif op == 'replace':
-                    minus = self.concatWithColor(minus, ColorDiff.RED, m)
-                    plus = self.concatWithColor(plus, ColorDiff.BLUE, p)
-            sys.stdout.write(minus + plus + ColorDiff.CANCEL)
+                    minus = self.concatWithColor(minus, self.DEL, m)
+                    plus = self.concatWithColor(plus, self.INS, p)
+            sys.stdout.write(minus + plus + CANCEL)
         else:
             self.outputMinus(self.minus_buf)
             self.outputPlus(self.plus_buf)
         self.clear()
 
     def outputPlus(self, lines):
-        sys.stdout.write(ColorDiff.BLUE + lines + ColorDiff.CANCEL)
+        sys.stdout.write(self.INS + lines + CANCEL)
 
     def outputMinus(self, lines):
-        sys.stdout.write(ColorDiff.RED + lines + ColorDiff.CANCEL)
+        sys.stdout.write(self.DEL + lines + CANCEL)
 
     def run(self):
         for line in fileinput.input():
