@@ -31,15 +31,28 @@ import fileinput
 import re
 import sys
 
+# ANSI colors
+RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN = [1,2,3,4,5,6]
+
+def brightFG(ansi_number):  # bright and/or bold, depends on terminal
+    return '\033[1;3%dm' % ansi_number
+
+def darkFG(ansi_number):
+    return '\033[0;3%dm' % ansi_number
+
+def brightBG(ansi_number):
+    return '\033[1;4%dm' % ansi_number
+
+def darkBG(ansi_number):
+    return '\033[0;4%dm' % ansi_number
+
+CANCEL = '\033[0m'
+
 class ColorDiff:
-    RED = '\033[1;31m'
-    BLUE = '\033[1;34m'
-    MAGENTA = '\033[1;35m'
-    DARK_RED = '\033[0;31m'
-    DARK_BLUE = '\033[0;34m'
-    DARK_MAGENTA = '\033[0;35m'
-    DARK_CYAN = '\033[0;36m'
-    CANCEL = '\033[0m'
+    DEL = dict(text=brightFG(RED), trailingSpace=darkBG(RED))
+    DEL_UNCHANGED = dict(text=darkFG(RED), trailingSpace=darkBG(RED))
+    INS = dict(text=brightFG(BLUE), trailingSpace=darkBG(BLUE))
+    INS_UNCHANGED = dict(text=darkFG(BLUE), trailingSpace=darkBG(BLUE))
 
     def __init__(self):
         self.clear()
@@ -48,11 +61,19 @@ class ColorDiff:
         self.minus_buf = ''
         self.plus_buf = ''
 
-    def concatWithColor(self, dst, col, src):
-        return dst + col + ''.join(src).replace('\n', '\n' + col)
+    def withColors(self, colors, tokens):
+        output = [colors['text']]
+        for tok in tokens:
+            match = re.match('( *)(\r*\n)', tok)
+            if match:
+                trailing_space, newline = match.groups()
+                output += [colors['trailingSpace'], trailing_space, CANCEL, newline, colors['text']]
+            else:
+                output += [tok]
+        return ''.join(output)
 
     def tokenize(self, line):
-        r = re.findall('[a-zA-Z0-9_]+| +|\r*\n|.', line, re.DOTALL)
+        r = re.findall('[a-zA-Z0-9_]+| *\r*\n| +|.', line, re.DOTALL)
         return r
 
     def flushAll(self):
@@ -66,27 +87,26 @@ class ColorDiff:
                 m = minus_buf[ms:me]
                 p = plus_buf[ps:pe]
                 if op == 'delete':
-                    minus = self.concatWithColor(minus, ColorDiff.RED, m)
+                    minus += self.withColors(self.DEL, m)
                 elif op == 'equal':
-                    minus = self.concatWithColor(
-                        minus, ColorDiff.DARK_RED, m)
-                    plus = self.concatWithColor(plus, ColorDiff.DARK_BLUE, p)
+                    minus += self.withColors(self.DEL_UNCHANGED, m)
+                    plus += self.withColors(self.INS_UNCHANGED, p)
                 elif op == 'insert':
-                    plus = self.concatWithColor(plus, ColorDiff.BLUE, p)
+                    plus += self.withColors(self.INS, p)
                 elif op == 'replace':
-                    minus = self.concatWithColor(minus, ColorDiff.RED, m)
-                    plus = self.concatWithColor(plus, ColorDiff.BLUE, p)
-            sys.stdout.write(minus + plus + ColorDiff.CANCEL)
+                    minus += self.withColors(self.DEL, m)
+                    plus += self.withColors(self.INS, p)
+            sys.stdout.write(minus + plus + CANCEL)
         else:
             self.outputMinus(self.minus_buf)
             self.outputPlus(self.plus_buf)
         self.clear()
 
-    def outputPlus(self, lines):
-        sys.stdout.write(ColorDiff.BLUE + lines + ColorDiff.CANCEL)
+    def outputPlus(self, tokens):
+        sys.stdout.write(self.withColors(self.INS, tokens) + CANCEL)
 
-    def outputMinus(self, lines):
-        sys.stdout.write(ColorDiff.RED + lines + ColorDiff.CANCEL)
+    def outputMinus(self, tokens):
+        sys.stdout.write(self.withColors(self.DEL, tokens) + CANCEL)
 
     def run(self):
         for line in fileinput.input():
@@ -98,7 +118,7 @@ class ColorDiff:
                 if self.minus_buf:
                     self.plus_buf += line
                 else:
-                    self.outputPlus(line)
+                    self.outputPlus(self.tokenize(line))
             else:
                 self.flushAll()
                 sys.stdout.write(line)
